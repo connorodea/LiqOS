@@ -1,65 +1,195 @@
-import Image from "next/image";
+import Link from "next/link";
+import { prisma } from "@/lib/db/prisma";
+import { PageHeader } from "@/components/liqos/page-header";
+import { StatCard } from "@/components/liqos/stat-card";
+import { StatusBadge } from "@/components/liqos/status-badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Package,
+  ClipboardCheck,
+  Boxes,
+  ShoppingCart,
+  Truck,
+  Wrench,
+  Plus,
+  ArrowRight,
+} from "lucide-react";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function LiqOSDashboard() {
+  const [
+    totalItems,
+    itemsInTesting,
+    lotsBuilt,
+    activeListings,
+    pendingShipments,
+    refurbQueue,
+    recentActivity,
+  ] = await Promise.all([
+    prisma.inventoryItem.count(),
+    prisma.inventoryItem.count({ where: { status: "TESTING" } }),
+    prisma.lot.count(),
+    prisma.listing.count({ where: { status: "ACTIVE" } }),
+    prisma.shipment.count({
+      where: { status: { in: ["PREPARING", "LABEL_CREATED"] } },
+    }),
+    prisma.refurbishmentJob.count({
+      where: { status: { in: ["QUEUED", "IN_PROGRESS"] } },
+    }),
+    prisma.activityLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+  ]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description="Overview of your liquidation operations"
+      />
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <StatCard
+          title="Total Items"
+          value={totalItems.toLocaleString()}
+          icon={Package}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        <StatCard
+          title="In Testing"
+          value={itemsInTesting.toLocaleString()}
+          icon={ClipboardCheck}
+        />
+        <StatCard
+          title="Lots Built"
+          value={lotsBuilt.toLocaleString()}
+          icon={Boxes}
+        />
+        <StatCard
+          title="Active Listings"
+          value={activeListings.toLocaleString()}
+          icon={ShoppingCart}
+        />
+        <StatCard
+          title="Pending Shipments"
+          value={pendingShipments.toLocaleString()}
+          icon={Truck}
+        />
+        <StatCard
+          title="Refurb Queue"
+          value={refurbQueue.toLocaleString()}
+          icon={Wrench}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/liqos/receiving/new">
+                <Button variant="outline" className="w-full h-auto py-4 flex-col gap-2">
+                  <Plus className="size-5" />
+                  <span className="text-xs">New Receiving</span>
+                </Button>
+              </Link>
+              <Link href="/liqos/inventory">
+                <Button variant="outline" className="w-full h-auto py-4 flex-col gap-2">
+                  <ClipboardCheck className="size-5" />
+                  <span className="text-xs">Grade Item</span>
+                </Button>
+              </Link>
+              <Link href="/liqos/lots/new">
+                <Button variant="outline" className="w-full h-auto py-4 flex-col gap-2">
+                  <Boxes className="size-5" />
+                  <span className="text-xs">Build Lot</span>
+                </Button>
+              </Link>
+              <Link href="/liqos/listings">
+                <Button variant="outline" className="w-full h-auto py-4 flex-col gap-2">
+                  <ShoppingCart className="size-5" />
+                  <span className="text-xs">Create Listing</span>
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Activity */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Recent Activity</CardTitle>
+            <Link href="/liqos/analytics">
+              <Button variant="ghost" size="sm">
+                View all <ArrowRight className="size-3 ml-1" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No recent activity. Start by creating a new receiving.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {recentActivity.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-center gap-3 text-sm"
+                  >
+                    <StatusBadge status={log.action} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-muted-foreground">
+                        {log.entityType}
+                      </span>
+                      <span className="mx-1 text-muted-foreground/50">|</span>
+                      <span className="font-mono text-xs">{log.entityId.slice(0, 8)}</span>
+                    </div>
+                    <time className="text-xs text-muted-foreground shrink-0">
+                      {new Date(log.createdAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Placeholder */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Throughput Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex h-48 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+              Chart placeholder — Items processed per day
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Grade Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex h-48 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+              Chart placeholder — Grade breakdown pie chart
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
