@@ -1,0 +1,343 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String  @id @default(cuid())
+  email       String  @unique
+  name        String?
+  password    String?
+  role        Role    @default(OPERATOR)
+  warehouseId String? @map("warehouse_id")
+  isActive    Boolean @default(true) @map("is_active")
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  activities  ActivityLog[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+}
+
+model Warehouse {
+  id       String  @id @default(cuid())
+  name     String
+  code     String  @unique
+  address  String
+  city     String
+  state    String
+  zip      String
+  isActive Boolean @default(true) @map("is_active")
+  users    User[]
+  receivings Receiving[]
+  items    InventoryItem[]
+  lots     Lot[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("warehouses")
+}
+
+model Receiving {
+  id            String          @id @default(cuid())
+  receiptNumber String          @unique @map("receipt_number")
+  warehouseId   String          @map("warehouse_id")
+  supplier      String?
+  poNumber      String?         @map("po_number")
+  status        ReceivingStatus @default(PENDING)
+  expectedUnits Int?            @map("expected_units")
+  receivedUnits Int             @default(0) @map("received_units")
+  notes         String?         @db.Text
+  receivedBy    String?         @map("received_by")
+  warehouse     Warehouse       @relation(fields: [warehouseId], references: [id])
+  items         InventoryItem[]
+  receivedAt    DateTime?       @map("received_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  @@index([warehouseId])
+  @@index([status])
+  @@map("receivings")
+}
+
+enum ReceivingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model InventoryItem {
+  id        String          @id @default(cuid())
+  sku       String          @unique
+  barcode   String?         @unique
+  name      String
+  brand     String?
+  model     String?
+  upc       String?
+  category  String?
+  condition String?
+  grade     ItemGrade       @default(UNTESTED)
+  status    InventoryStatus @default(RECEIVED)
+  testedBy      String?   @map("tested_by")
+  testedAt      DateTime? @map("tested_at")
+  testNotes     String?   @map("test_notes") @db.Text
+  functional    Boolean?
+  cosmetic      String?
+  missingParts  String?   @map("missing_parts")
+  batteryHealth Int?      @map("battery_health")
+  retailPrice   Decimal?  @map("retail_price") @db.Decimal(10, 2)
+  costBasis     Decimal?  @map("cost_basis") @db.Decimal(10, 2)
+  sellingPrice  Decimal?  @map("selling_price") @db.Decimal(10, 2)
+  warehouseId   String    @map("warehouse_id")
+  bin           String?
+  shelf         String?
+  zone          String?
+  receivingId   String?   @map("receiving_id")
+  lotId         String?   @map("lot_id")
+  warehouse     Warehouse         @relation(fields: [warehouseId], references: [id])
+  receiving     Receiving?        @relation(fields: [receivingId], references: [id])
+  lot           Lot?              @relation(fields: [lotId], references: [id])
+  photos        ItemPhoto[]
+  listings      Listing[]
+  refurbishment RefurbishmentJob?
+  labels        Label[]
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  @@index([warehouseId])
+  @@index([status])
+  @@index([grade])
+  @@index([lotId])
+  @@map("inventory_items")
+}
+
+enum ItemGrade {
+  UNTESTED
+  LN
+  VG
+  G
+  PO
+  SA
+  PARTS_ONLY
+}
+enum InventoryStatus {
+  RECEIVED
+  TESTING
+  GRADED
+  IN_LOT
+  LISTED
+  SOLD
+  SHIPPED
+  REFURBISHING
+  RECYCLED
+  DISPOSED
+}
+
+model Lot {
+  id          String    @id @default(cuid())
+  lotNumber   String    @unique @map("lot_number")
+  name        String
+  lotType     String    @map("lot_type")
+  status      LotStatus @default(BUILDING)
+  warehouseId String    @map("warehouse_id")
+  category    String?
+  condition   String?
+  targetItems Int?      @map("target_items")
+  weight      Decimal?  @db.Decimal(10, 2)
+  askingPrice Decimal?  @map("asking_price") @db.Decimal(10, 2)
+  retailValue Decimal?  @map("retail_value") @db.Decimal(10, 2)
+  costBasis   Decimal?  @map("cost_basis") @db.Decimal(10, 2)
+  manifestGenerated Boolean @default(false) @map("manifest_generated")
+  manifestUrl String?   @map("manifest_url")
+  publishedToStore Boolean @default(false) @map("published_to_store")
+  storeProductId String? @map("store_product_id")
+  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id])
+  items       InventoryItem[]
+  photos      ItemPhoto[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@index([warehouseId])
+  @@index([status])
+  @@map("lots")
+}
+
+enum LotStatus {
+  BUILDING
+  READY
+  MANIFESTED
+  LISTED_FOR_SALE
+  SOLD
+  SHIPPED
+}
+
+model ItemPhoto {
+  id           String  @id @default(cuid())
+  url          String
+  filename     String
+  alt          String?
+  displayOrder Int     @default(0) @map("display_order")
+  photoType    String  @default("item") @map("photo_type")
+  inventoryItemId String? @map("inventory_item_id")
+  lotId        String? @map("lot_id")
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  lot          Lot?    @relation(fields: [lotId], references: [id])
+  createdAt    DateTime @default(now()) @map("created_at")
+  @@map("photos")
+}
+
+model Listing {
+  id              String        @id @default(cuid())
+  inventoryItemId String        @map("inventory_item_id")
+  channel         String
+  externalId      String?       @map("external_id")
+  listingUrl      String?       @map("listing_url")
+  status          ListingStatus @default(DRAFT)
+  title           String
+  description     String?       @db.Text
+  price           Decimal       @db.Decimal(10, 2)
+  quantity        Int           @default(1)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  listedAt        DateTime?     @map("listed_at")
+  soldAt          DateTime?     @map("sold_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  @@index([inventoryItemId])
+  @@index([channel])
+  @@map("listings")
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  ENDED
+  CANCELLED
+}
+
+model RefurbishmentJob {
+  id              String              @id @default(cuid())
+  inventoryItemId String              @unique @map("inventory_item_id")
+  status          RefurbishmentStatus @default(QUEUED)
+  jobType         String?             @map("job_type")
+  assignedTo      String?             @map("assigned_to")
+  priority        Int                 @default(0)
+  issueDescription String? @map("issue_description") @db.Text
+  workPerformed   String? @map("work_performed") @db.Text
+  partsUsed       String? @map("parts_used") @db.Text
+  partsCost       Decimal? @map("parts_cost") @db.Decimal(10, 2)
+  laborMinutes    Int?    @map("labor_minutes")
+  gradeBefore     String? @map("grade_before")
+  gradeAfter      String? @map("grade_after")
+  valueBefore     Decimal? @map("value_before") @db.Decimal(10, 2)
+  valueAfter      Decimal? @map("value_after") @db.Decimal(10, 2)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  @@index([status])
+  @@map("refurbishment_jobs")
+}
+
+enum RefurbishmentStatus {
+  QUEUED
+  IN_PROGRESS
+  QA_CHECK
+  COMPLETED
+  FAILED
+}
+
+model Label {
+  id              String    @id @default(cuid())
+  inventoryItemId String    @map("inventory_item_id")
+  labelType       String    @map("label_type")
+  barcodeData     String    @map("barcode_data")
+  printedAt       DateTime? @map("printed_at")
+  printedBy       String?   @map("printed_by")
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  createdAt       DateTime @default(now()) @map("created_at")
+  @@index([inventoryItemId])
+  @@map("labels")
+}
+
+model Shipment {
+  id             String         @id @default(cuid())
+  shipmentNumber String         @unique @map("shipment_number")
+  status         ShipmentStatus @default(PREPARING)
+  carrier        String?
+  service        String?
+  trackingNumber String?        @map("tracking_number")
+  trackingUrl    String?        @map("tracking_url")
+  shipFrom       String?        @map("ship_from") @db.Text
+  shipTo         String?        @map("ship_to") @db.Text
+  weight         Decimal?       @db.Decimal(10, 2)
+  dimensions     String?
+  shippingCost   Decimal?       @map("shipping_cost") @db.Decimal(10, 2)
+  shippedAt      DateTime?      @map("shipped_at")
+  deliveredAt    DateTime?      @map("delivered_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  @@index([status])
+  @@map("shipments")
+}
+
+enum ShipmentStatus {
+  PREPARING
+  LABEL_CREATED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  EXCEPTION
+}
+
+model WorkflowTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  steps       Json
+  isActive    Boolean @default(true) @map("is_active")
+  instances   WorkflowInstance[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@map("workflow_templates")
+}
+
+model WorkflowInstance {
+  id          String @id @default(cuid())
+  templateId  String @map("template_id")
+  currentStep Int    @default(0) @map("current_step")
+  status      String @default("active")
+  stepData    Json?  @map("step_data")
+  entityType  String? @map("entity_type")
+  entityId    String? @map("entity_id")
+  template    WorkflowTemplate @relation(fields: [templateId], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@index([templateId])
+  @@map("workflow_instances")
+}
+
+model ActivityLog {
+  id         String  @id @default(cuid())
+  userId     String? @map("user_id")
+  action     String
+  entityType String  @map("entity_type")
+  entityId   String  @map("entity_id")
+  details    Json?
+  ipAddress  String? @map("ip_address")
+  user       User?   @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_log")
+}
